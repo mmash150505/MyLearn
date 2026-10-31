@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  courses       Course[]
+  progress      Progress[]
+  accounts      Account[]
+  sessions      Session[]
+  exercises     UserExercise[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  pdfUrl      String
+  pdfName     String
+  totalPages  Int
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chapters    Chapter[]
+  progress    Progress[]
+  parseStatus ParseStatus @default(PENDING)
+  parseError  String?  @db.Text
+}
+
+model Chapter {
+  id            String     @id @default(cuid())
+  courseId      String
+  course        Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  number        Int
+  title         String
+  order         Int
+  sections      Section[]
+  exercises     Exercise[]
+  progressCurrent Progress[] @relation("CurrentChapter")
+  
+  @@unique([courseId, number])
+}
+
+model Section {
+  id        String      @id @default(cuid())
+  chapterId String
+  chapter   Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  type      SectionType
+  number    String
+  title     String?
+  content   String      @db.Text
+  pageStart Int
+  pageEnd   Int
+  order     Int
+}
+
+model Exercise {
+  id          String        @id @default(cuid())
+  chapterId   String
+  chapter     Chapter       @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  number      String
+  statement   String        @db.Text
+  solution    String?       @db.Text
+  difficulty  Difficulty    @default(MEDIUM)
+  tags        String[]
+  order       Int
+  userAttempts UserExercise[]
+}
+
+model UserExercise {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  status      AttemptStatus  @default(NOT_STARTED)
+  userAnswer  String?        @db.Text
+  timeSpent   Int            @default(0)
+  attempts    Int            @default(0)
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([userId, exerciseId])
+}
+
+model Progress {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId          String
+  course            Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  currentChapterId  String?
+  currentChapter    Chapter?  @relation("CurrentChapter", fields: [currentChapterId], references: [id])
+  completedSections String[]
+  lastStudiedAt     DateTime  @default(now())
+  streakDays        Int       @default(0)
+  totalTimeSpent    Int       @default(0)
+
+  @@unique([userId, courseId])
+}
+
+enum SectionType {
+  DEFINITION
+  EXAMPLE
+  PROPOSITION
+  THEOREM
+  COROLLARY
+  REMARK
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SOLVED
+  NEEDS_REVIEW
+}
+
+enum ParseStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
